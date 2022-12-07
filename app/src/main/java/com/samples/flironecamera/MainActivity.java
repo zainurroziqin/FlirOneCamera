@@ -99,12 +99,6 @@ public class MainActivity extends AppCompatActivity {
         showSDKversion(ThermalSdkAndroid.getVersion());
     }
 
-//    @Override
-//    protected void onResume() {
-//        super.onResume();
-//        cameraHandler.startStream(streamDataListener);
-//    }
-
     public void startDiscovery(View view) {
         startDiscovery();
     }
@@ -129,6 +123,9 @@ public class MainActivity extends AppCompatActivity {
     public void disconnect(View view) {
         disconnect();
     }
+
+    public void startFaceDetection(View view){ startRecord(); }
+
 
     /**
      * Handle Android permission request response for Bluetooth permissions
@@ -228,6 +225,11 @@ public class MainActivity extends AppCompatActivity {
         connectionStatus.setText(getString(R.string.connection_status_text, deviceId + " " + status));
     }
 
+    private void startRecord(){
+        cameraHandler.stopRc();
+        cameraHandler.startRecord(dataRecord);
+    }
+
     /**
      * Start camera discovery
      */
@@ -314,81 +316,43 @@ public class MainActivity extends AppCompatActivity {
         }
     };
 
-//    private final CameraHandler.FaceDetect faceDetect = new CameraHandler.FaceDetect(){
-//
-//
-//
-//        @Override
-//        public void detect(Bitmap thermalBitmap, Bitmap rgbBitmap) {
-//
-//            runOnUiThread(new Runnable() {
-//                @Override
-//                public void run() {
-//
-////                    FrameDataHolder poll = framesBuffer.poll();
-//                    Bitmap cropRgbBitmap = Bitmap.createBitmap(rgbBitmap, 65, 160, 960, 1280);
-//                    Canvas rgbCanvas = new Canvas(cropRgbBitmap);
-//                    rgbCanvas.drawBitmap(cropRgbBitmap, 0, 0, null);
-//                    Canvas thermalCanvas = new Canvas(thermalBitmap);
-//                    thermalCanvas.drawBitmap(thermalBitmap, 0, 0, null);
-//
-//                    Paint myRectPaint = new Paint();
-//                    myRectPaint.setStrokeWidth(5);
-//                    myRectPaint.setColor(Color.RED);
-//                    myRectPaint.setStyle(Paint.Style.STROKE);
-//
-//                    //Create a Canvas object for drawing on
-//                    Bitmap tempBitmap = Bitmap.createBitmap(cropRgbBitmap.getWidth(), cropRgbBitmap.getHeight(), Bitmap.Config.RGB_565);
-//                    Canvas tempCanvas = new Canvas(tempBitmap);
-//                    tempCanvas.drawBitmap(rgbBitmap, 0, 0, null);
-//
-//                    FaceDetector faceDetector = new FaceDetector
-//                            .Builder(getApplicationContext())
-//                            .setTrackingEnabled(false)
-//                            .setProminentFaceOnly(true)
-//                            .setMode(FaceDetector.FAST_MODE)
-//                            .setLandmarkType(FaceDetector.ALL_LANDMARKS)
-//                            .build();
-//
-//                    Frame frame = new Frame.Builder().setBitmap(cropRgbBitmap).build();
-//                    SparseArray<Face> faces = faceDetector.detect(frame);
-//
-//                    for(int i=0; i<faces.size(); i++) {
-//                        Face thisFace = faces.valueAt(i);
-//                        float x1 = thisFace.getPosition().x;
-//                        float y1 = thisFace.getPosition().y;
-//                        float x2 = x1 + thisFace.getWidth();
-//                        float y2 = y1 + thisFace.getHeight();
-//                        if (x1 <= 1)
-//                            x1 = 1;
-//                        if (x1 >= cropRgbBitmap.getWidth())
-//                            x1 = cropRgbBitmap.getWidth();
-//                        if (y1 <= 1)
-//                            y1 = 1;
-//                        if (y1 >= cropRgbBitmap.getHeight())
-//                            y1 = cropRgbBitmap.getHeight();
-//                        if (x2 <= 1)
-//                            x2 = 1;
-//                        if (x2 >= cropRgbBitmap.getWidth())
-//                            x2 = cropRgbBitmap.getWidth();
-//                        if (y2 <= 1)
-//                            y2 = 1;
-//                        if (y2 >= cropRgbBitmap.getHeight())
-//                            y2 = cropRgbBitmap.getHeight();
-//
-//                        tempCanvas.drawRoundRect(new RectF(x1, y1, x2, y2), 2, 2, myRectPaint);
-////                float x =  thisFace.getPosition().x + thisFace.getWidth() / 2;
-////                float y = thisFace.getPosition().y + thisFace.getHeight() / 2;
-////                tempCanvas.drawCircle(x, y, 10.0f, mIdPaint);
-//                        streamDataListener.images(thermalBitmap, cropRgbBitmap);
-//
-//                    }
-//                }
-//            });
-//        }
-//    };
+    private final CameraHandler.DataRecord dataRecord = new CameraHandler.DataRecord() {
+
+        @Override
+        public void record(FrameDataHolder dataHolder) {
+
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    msxImage.setImageBitmap(dataHolder.msxBitmap);
+                    photoImage.setImageBitmap(dataHolder.dcBitmap);
+                }
+            });
+        }
+
+        @Override
+        public void record(Bitmap msxBitmap, Bitmap dcBitmap) {
+
+            try {
+                framesBuffer.put(new FrameDataHolder(msxBitmap,dcBitmap));
+            } catch (InterruptedException e) {
+                //if interrupted while waiting for adding a new item in the queue
+                Log.e(TAG,"images(), unable to add incoming images to frames buffer, exception:"+e);
+            }
+
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    Log.d(TAG,"framebuffer size:"+framesBuffer.size());
+                    FrameDataHolder poll = framesBuffer.poll();
+                    msxImage.setImageBitmap(poll.msxBitmap);
+                    photoImage.setImageBitmap(poll.dcBitmap);
+                }
+            });
 
 
+        }
+    };
     /**
      * Camera Discovery thermalImageStreamListener, is notified if a new camera was found during a active discovery phase
      * <p>

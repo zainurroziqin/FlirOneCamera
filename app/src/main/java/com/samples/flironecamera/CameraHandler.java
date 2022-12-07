@@ -73,7 +73,7 @@ class CameraHandler {
 
     private StreamDataListener streamDataListener;
 
-//    private  FaceDetect faceDetect;
+    private  DataRecord dataRecord;
 
 
     public interface StreamDataListener {
@@ -81,9 +81,10 @@ class CameraHandler {
         void images(Bitmap msxBitmap, Bitmap dcBitmap);
     }
 
-//    public interface FaceDetect{
-//        void detect(Bitmap thermalBitmap, Bitmap rgbBitmap);
-//    }
+    public interface DataRecord{
+        void record(FrameDataHolder dataHolder);
+        void record(Bitmap thermalBitmap, Bitmap rgbBitmap);
+    }
 
     //Discovered FLIR cameras
     LinkedList<Identity> foundCameraIdentities = new LinkedList<>();
@@ -142,15 +143,23 @@ class CameraHandler {
         camera.subscribeStream(thermalImageStreamListener);
     }
 
-//    public void setFaceDetect(FaceDetect faceDetect){
-//        this.faceDetect = faceDetect;
-//    }
+    public void startRecord(DataRecord listener){
+        this.dataRecord = listener;
+        camera.subscribeStream(thermalImageRecordListener);
+    }
 
     /**
      * Stop a stream of {@link ThermalImage}s images from a FLIR ONE or emulator
      */
     public void stopStream(ThermalImageStreamListener listener) {
         camera.unsubscribeStream(listener);
+    }
+    public void stopRecord(ThermalImageStreamListener listener) {
+        camera.unsubscribeStream(listener);
+    }
+
+    public void stopRc(){
+        stopRecord(thermalImageStreamListener);
     }
 
     /**
@@ -227,8 +236,19 @@ class CameraHandler {
             //Will be called on a non-ui thread
             Log.d(TAG, "onImageReceived(), we got another ThermalImage");
             withImage(this, handleIncomingImage);
+//
         }
     };
+
+    private final ThermalImageStreamListener thermalImageRecordListener = new ThermalImageStreamListener() {
+        @Override
+        public void onImageReceived() {
+            //Will be called on a non-ui thread
+            Log.d(TAG, "onImageReceived(), we got another ThermalImage");
+            withImage(this, handleRecordImage);
+        }
+    };
+
 
     /**
      * Function to process a Thermal Image and update UI
@@ -253,6 +273,32 @@ class CameraHandler {
                 thermalImage.getFusion().setFusionMode(FusionMode.VISUAL_ONLY);
                 rgbBitmap = BitmapAndroid.createBitmap(thermalImage.getFusion().getPhoto()).getBitMap();
             }
+            streamDataListener.images(thermalBitmap, rgbBitmap);
+        }
+    };
+
+    private final Camera.Consumer<ThermalImage> handleRecordImage = new Camera.Consumer<ThermalImage>() {
+        @Override
+        public void accept(ThermalImage thermalImage) {
+            Log.d(TAG, "accept() called with: thermalImage = [" + thermalImage.getDescription() + "]");
+            //Will be called on a non-ui thread,
+            // extract information on the background thread and send the specific information to the UI thread
+            //Get a bitmap with only IR data
+//            stopStream(thermalImageStreamListener);
+
+            Bitmap thermalBitmap;
+            Palette palette = PaletteManager.getDefaultPalettes().get(0);
+            {
+                thermalImage.getFusion().setFusionMode(FusionMode.THERMAL_ONLY);
+                thermalImage.setPalette(palette);
+                thermalBitmap = BitmapAndroid.createBitmap(thermalImage.getImage()).getBitMap();
+            }
+            //Get a bitmap with the visual image, it might have different dimensions then the bitmap from THERMAL_ONLY
+            Bitmap rgbBitmap;
+            {
+                thermalImage.getFusion().setFusionMode(FusionMode.VISUAL_ONLY);
+                rgbBitmap = BitmapAndroid.createBitmap(thermalImage.getFusion().getPhoto()).getBitMap();
+            }
 //            new Thread(() ->{
             Bitmap cropRgbBitmap = Bitmap.createBitmap(rgbBitmap, 65, 160, 960, 1280);
             Canvas rgbCanvas = new Canvas(cropRgbBitmap);
@@ -260,7 +306,11 @@ class CameraHandler {
             Canvas thermalCanvas = new Canvas(thermalBitmap);
             thermalCanvas.drawBitmap(thermalBitmap, 0, 0, null);
 
-            thermalLinkedList list = new thermalLinkedList();
+//            ThermalLinkedList thermalLinkedList = new ThermalLinkedList();
+            LinkedList<Double> thermalLinkedList = new LinkedList<Double>();
+            int count = 0;
+            int ITERATIVE_MAXIMUM = 200;
+
 
             Paint myRectPaint = new Paint();
             myRectPaint.setStrokeWidth(5);
@@ -274,115 +324,118 @@ class CameraHandler {
                     .setMode(FaceDetector.FAST_MODE)
                     .setLandmarkType(FaceDetector.ALL_LANDMARKS)
                     .build();
-
             Paint hidungPaint;
             hidungPaint = new Paint();
             hidungPaint.setStrokeWidth(3);
             hidungPaint.setColor(Color.GREEN);
             hidungPaint.setStyle(Paint.Style.STROKE);
+//            for(int j = 0; j<ITERATIVE_MAXIMUM; j++){
 
-
-            Frame frame = new Frame.Builder().setBitmap(cropRgbBitmap).build();
-            SparseArray<Face> faces = faceDetector.detect(frame);
-            faceDetector.release();
-
-            //Draw Rectangles on the Faces
-            for(int i=0; i<faces.size(); i++) {
-                Face thisFace = faces.valueAt(i);
-                float x1 = thisFace.getPosition().x;
-                float y1 = thisFace.getPosition().y;
-                float x2 = x1 + thisFace.getWidth();
-                float y2 = y1 + thisFace.getHeight();
-                if (x1 <= 1)
-                    x1 = 1;
-                if (x1 >= cropRgbBitmap.getWidth())
-                    x1 = cropRgbBitmap.getWidth();
-                if (y1 <= 1)
-                    y1 = 1;
-                if (y1 >= cropRgbBitmap.getHeight())
-                    y1 = cropRgbBitmap.getHeight();
-                if (x2 <= 1)
-                    x2 = 1;
-                if (x2 >= cropRgbBitmap.getWidth())
-                    x2 = cropRgbBitmap.getWidth();
-                if (y2 <= 1)
-                    y2 = 1;
-                if (y2 >= cropRgbBitmap.getHeight())
-                    y2 = cropRgbBitmap.getHeight();
-
-                rgbCanvas.drawRoundRect(new RectF(x1, y1, x2, y2), 2, 2, myRectPaint);
-                thermalCanvas.drawRoundRect(new RectF(x1/2, y1/2, x2/2, y2/2), 2, 2, hidungPaint);
-
-                float rgbWidth = rgbCanvas.getWidth();
-                float rgbHeight = rgbCanvas.getHeight();
-
-                for(Landmark landmark : thisFace.getLandmarks()){
-                    if (landmark.getType() == Landmark.NOSE_BASE){
-                        int cx = (int) (landmark.getPosition().x * drawBitmap(rgbCanvas, cropRgbBitmap));
-                        int cy = (int) (landmark.getPosition().y * drawBitmap(rgbCanvas, cropRgbBitmap));
-                        float skalaWidth = skalaWidth(rgbWidth);
-                        float skalaHeight = skalaHeight(rgbHeight);
-                        float cLeft = cx - skalaWidth + 60;
-                        float cRight = cx + skalaWidth - 60;
-                        float cBottom = cy + skalaHeight - 80;
-
-                        if(cLeft <= x1){
-                            cLeft = x1;
+                if(faceDetector.isOperational()) {
+                    Frame frame = new Frame.Builder().setBitmap(cropRgbBitmap).build();
+                    SparseArray<Face> faces = faceDetector.detect(frame);
+                    faceDetector.release();
+                    if (faces.size() > 0) {
+                        count++;
+                        if (count == (ITERATIVE_MAXIMUM + 1)) {
+                            count = 0;
+                            thermalLinkedList.add(0, 0.0);
                         }
-                        if (cRight >= x2){
-                            cRight = x2;
-                        }
-                        if(cBottom >= y2){
-                            cBottom = y2;
-                        }
-                        rgbCanvas.drawRoundRect(new RectF(cLeft, cy, cRight, cBottom), 2, 2, hidungPaint);
-                        thermalCanvas.drawRoundRect(new RectF(cLeft/2, cy/2, cRight/2, cBottom/2), 2, 2, hidungPaint);
+                        //Draw Rectangles on the Faces
+                        for (int i = 0; i < faces.size(); i++) {
+                            Face thisFace = faces.valueAt(i);
+                            float x1 = thisFace.getPosition().x;
+                            float y1 = thisFace.getPosition().y;
+                            float x2 = x1 + thisFace.getWidth();
+                            float y2 = y1 + thisFace.getHeight();
+                            if (x1 <= 1)
+                                x1 = 1;
+                            if (x1 >= cropRgbBitmap.getWidth())
+                                x1 = cropRgbBitmap.getWidth();
+                            if (y1 <= 1)
+                                y1 = 1;
+                            if (y1 >= cropRgbBitmap.getHeight())
+                                y1 = cropRgbBitmap.getHeight();
+                            if (x2 <= 1)
+                                x2 = 1;
+                            if (x2 >= cropRgbBitmap.getWidth())
+                                x2 = cropRgbBitmap.getWidth();
+                            if (y2 <= 1)
+                                y2 = 1;
+                            if (y2 >= cropRgbBitmap.getHeight())
+                                y2 = cropRgbBitmap.getHeight();
 
-                        float wBlock  = Math.abs(cRight - cLeft)/4;
-                        float modBlock = Math.abs(cRight - cLeft) % 4;
+                            rgbCanvas.drawRoundRect(new RectF(x1, y1, x2, y2), 2, 2, myRectPaint);
+                            thermalCanvas.drawRoundRect(new RectF(x1 / 2, y1 / 2, x2 / 2, y2 / 2), 2, 2, hidungPaint);
 
-                        float sBlock = cLeft;
-                        float srBlock = cLeft + wBlock;
-                        double saveVarianceBlock = -100000;
-                        double saveTempBlock = -100000;
+                            float rgbWidth = rgbCanvas.getWidth();
+                            float rgbHeight = rgbCanvas.getHeight();
 
-                        for(int k = 0; k<4; k++){
-                            rgbCanvas.drawRoundRect(new RectF(sBlock, cy, srBlock, cBottom), 2, 2, hidungPaint);
-                            thermalCanvas.drawRoundRect(new RectF(sBlock/2, cy/2, srBlock/2, cBottom/2), 2, 2, hidungPaint);
-                            Rectangle tempBlock = new Rectangle((int) sBlock/2, cy/2, (int) wBlock, Math.abs((int) (cBottom/2) - (cy/2)));
+                            for (Landmark landmark : thisFace.getLandmarks()) {
+                                if (landmark.getType() == Landmark.NOSE_BASE) {
+                                    int cx = (int) (landmark.getPosition().x * drawBitmap(rgbCanvas, cropRgbBitmap));
+                                    int cy = (int) (landmark.getPosition().y * drawBitmap(rgbCanvas, cropRgbBitmap));
+                                    float skalaWidth = skalaWidth(rgbWidth);
+                                    float skalaHeight = skalaHeight(rgbHeight);
+                                    float cLeft = cx - skalaWidth + 60;
+                                    float cRight = cx + skalaWidth - 60;
+                                    float cBottom = cy + skalaHeight - 80;
 
-                            double[] temperatureBlock = thermalImage.getValues(tempBlock);
-                            double varianBlock = getVarianceNostril(temperatureBlock);
-                            if(varianBlock > saveVarianceBlock){
-                                saveVarianceBlock = varianBlock;
-                                saveTempBlock = getMean(temperatureBlock) - 273.15;
+                                    if (cLeft <= x1) {
+                                        cLeft = x1;
+                                    }
+                                    if (cRight >= x2) {
+                                        cRight = x2;
+                                    }
+                                    if (cBottom >= y2) {
+                                        cBottom = y2;
+                                    }
+                                    rgbCanvas.drawRoundRect(new RectF(cLeft, cy, cRight, cBottom), 2, 2, hidungPaint);
+                                    thermalCanvas.drawRoundRect(new RectF(cLeft / 2, cy / 2, cRight / 2, cBottom / 2), 2, 2, hidungPaint);
+
+                                    float wBlock = Math.abs(cRight - cLeft) / 4;
+                                    float modBlock = Math.abs(cRight - cLeft) % 4;
+
+                                    float sBlock = cLeft;
+                                    float srBlock = cLeft + wBlock;
+                                    double saveVarianceBlock = -100000;
+                                    double saveTempBlock = -100000;
+
+                                    for (int k = 0; k < 4; k++) {
+                                        rgbCanvas.drawRoundRect(new RectF(sBlock, cy, srBlock, cBottom), 2, 2, hidungPaint);
+                                        thermalCanvas.drawRoundRect(new RectF(sBlock / 2, cy / 2, srBlock / 2, cBottom / 2), 2, 2, hidungPaint);
+                                        Rectangle tempBlock = new Rectangle((int) sBlock / 2, cy / 2, (int) wBlock, Math.abs((int) (cBottom / 2) - (cy / 2)));
+
+                                        double[] temperatureBlock = thermalImage.getValues(tempBlock);
+                                        double varianBlock = getVarianceNostril(temperatureBlock);
+                                        if (varianBlock > saveVarianceBlock) {
+                                            saveVarianceBlock = varianBlock;
+                                            saveTempBlock = getMean(temperatureBlock) - 273.15;
+                                        }
+
+                                        sBlock = srBlock;
+                                        if (k == 3) {
+                                            wBlock = wBlock + modBlock;
+                                        }
+                                        srBlock = srBlock + wBlock;
+                                    }
+
+                                    thermalLinkedList.add(1,38.0);
+                                }
                             }
-
-                            sBlock = srBlock;
-                            if(k==3){
-                                wBlock = wBlock + modBlock;
-                            }
-                            srBlock = srBlock+wBlock;
                         }
-
-                        thermalLinkedList.tambah(list,saveTempBlock);
-
-
-
                     }
+                    dataRecord.record(thermalBitmap, cropRgbBitmap);
+    //            }).start();
                 }
-            }
-
-
-            streamDataListener.images(thermalBitmap, cropRgbBitmap);
-//            }).start();
+//            }
         }
 
         public double getVarianceNostril(double[] temperatureBlock){
             double hasil = 0;
             double mean = getMean(temperatureBlock);
             for(int i = 0; i<temperatureBlock.length; i++){
-                double hasilKuadrat = (temperatureBlock[i] - mean) * 2;
+                double hasilKuadrat = Math.pow((temperatureBlock[i] - mean),2);
                 hasil = hasil + hasilKuadrat;
             }
             return hasil/ temperatureBlock.length;

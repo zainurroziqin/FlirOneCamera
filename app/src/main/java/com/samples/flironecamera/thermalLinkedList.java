@@ -1,31 +1,64 @@
 package com.samples.flironecamera;
 
-public class thermalLinkedList
-{
+class Node{
+    double data;
+    Node next;
+    Node(double data){
+        this.data = data;
+    }
+}
+class ThermalLinkedList {
     Node head;
-    static class Node{
-        double data;
-        Node next;
 
-        Node(double d)
-        {
-            data = d;
-            next = null;
-        }
-
-    }
-    public  static thermalLinkedList tambah(thermalLinkedList list, double data){
-        Node new_node = new Node(data);
-        if(list.head == null){
-            list.head = new_node;
-        }
-        else{
-            Node last = list.head;
-            while (last.next != null){
-                last = last.next;
+    public void insert(double data) {
+        Node newNode = new Node(data);
+        if(head == null) {
+            head = newNode;
+        }else {
+            Node currentNode = head;
+            while(currentNode.next != null) {
+                currentNode= currentNode.next;
             }
-            last.next = new_node;
+            currentNode.next = newNode;
         }
-        return list;
     }
+
+    public void insertAtStart(double data) {
+        Node newNode = new Node(data);
+
+        newNode.next = head;
+        head = newNode;
+    }
+
+    public void insertAt(int index, double data) {
+        if(index == 0){
+            insertAtStart(data);
+        }else{
+            Node newNode = new Node(data);
+
+            Node currentNode = head;
+            for(int i = 0; i < index - 1; i++) {
+                currentNode = currentNode.next;
+            }
+            newNode.next = currentNode.next;
+            currentNode.next = newNode;
+        }
+    }
+    public String show() {
+        Node currentNode = head;
+        String hasil = null;
+        if(currentNode == null){
+//            System.out.println("Linked list is empty");
+            hasil = "kosong";
+        }
+        else {
+            while(currentNode != null) {
+//                System.out.print(currentNode.data + " ");
+                hasil = currentNode.data + " ";
+                currentNode = currentNode.next;
+            }
+        }
+        return hasil;
+    }
+
 }
