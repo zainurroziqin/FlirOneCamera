@@ -92,6 +92,10 @@ class CameraHandler {
     //A FLIR Camera
     private Camera camera;
 
+    LinkedList<Double> thermalLinkedList = new LinkedList<Double>();
+    int count = 0;
+    int ITERATIVE_MAXIMUM = 200;
+
     Context context;
 
 
@@ -306,11 +310,6 @@ class CameraHandler {
             Canvas thermalCanvas = new Canvas(thermalBitmap);
             thermalCanvas.drawBitmap(thermalBitmap, 0, 0, null);
 
-//            ThermalLinkedList thermalLinkedList = new ThermalLinkedList();
-            LinkedList<Double> thermalLinkedList = new LinkedList<Double>();
-            int count = 0;
-            int ITERATIVE_MAXIMUM = 200;
-
 
             Paint myRectPaint = new Paint();
             myRectPaint.setStrokeWidth(5);
@@ -420,10 +419,12 @@ class CameraHandler {
                                         srBlock = srBlock + wBlock;
                                     }
 
-                                    thermalLinkedList.add(1,38.0);
+                                    thermalLinkedList.add(count,saveTempBlock);
                                 }
                             }
                         }
+                    }else{
+                        thermalLinkedList.add(0,0.0 );
                     }
                     dataRecord.record(thermalBitmap, cropRgbBitmap);
     //            }).start();
