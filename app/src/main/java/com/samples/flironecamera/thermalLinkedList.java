@@ -44,7 +44,7 @@ class ThermalLinkedList {
             currentNode.next = newNode;
         }
     }
-    public String show() {
+    public String hasil() {
         Node currentNode = head;
         String hasil = null;
         if(currentNode == null){

@@ -10,12 +10,14 @@
  * ******************************************************************/
 package com.samples.flironecamera;
 
+import android.content.DialogInterface;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.RectF;
 import android.os.Bundle;
+import android.os.Handler;
 import android.util.Log;
 import android.util.SparseArray;
 import android.view.View;
@@ -40,6 +42,8 @@ import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
 import java.util.concurrent.LinkedBlockingQueue;
+
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 
 /**
@@ -70,6 +74,8 @@ public class MainActivity extends AppCompatActivity {
 
     private LinkedBlockingQueue<FrameDataHolder> framesBuffer = new LinkedBlockingQueue(21);
     private UsbPermissionHandler usbPermissionHandler = new UsbPermissionHandler();
+
+
 
     /**
      * Show message on the screen
@@ -124,7 +130,15 @@ public class MainActivity extends AppCompatActivity {
         disconnect();
     }
 
-    public void startFaceDetection(View view){ startRecord(); }
+    public void startFaceDetection(View view){
+        new Thread(() -> {
+            startRecord();
+        }).start();
+    }
+
+    public void dialog(View view) {
+        showCustomDialog();
+    }
 
 
     /**
@@ -134,6 +148,26 @@ public class MainActivity extends AppCompatActivity {
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         Log.d(TAG, "onRequestPermissionsResult() called with: requestCode = [" + requestCode + "], permissions = [" + permissions + "], grantResults = [" + grantResults + "]");
         permissionHandler.onRequestPermissionsResult(requestCode, permissions, grantResults);
+    }
+
+    private void showCustomDialog(){
+        final String[] list = cameraHandler.getSuhu();
+        AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this);
+
+        builder.setTitle("Suhu").setItems(list, new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialogInterface, int i) {
+            }
+        });
+
+        builder.setOnCancelListener(new DialogInterface.OnCancelListener() {
+            @Override
+            public void onCancel(DialogInterface dialogInterface) {
+
+            }
+        });
+        builder.create();
+        builder.show();
     }
 
     /**
@@ -226,8 +260,28 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void startRecord(){
-        cameraHandler.stopRc();
-        cameraHandler.startRecord(dataRecord);
+//        final Handler handler = new Handler();
+//        handler.postDelayed(new Runnable() {
+//            @Override
+//            public void run() {
+//                // Do something after 5s = 5000ms
+//                cameraHandler.stopRc();
+//                cameraHandler.startRecord(dataRecord);
+//            }
+//        }, 1000);
+
+//        new Thread(() -> {
+//            cameraHandler.stopRc();
+//            cameraHandler.startRecord(dataRecord);
+//        }).start();
+
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                cameraHandler.stopRc();
+                cameraHandler.startRecord(dataRecord);
+            }
+        });
     }
 
     /**

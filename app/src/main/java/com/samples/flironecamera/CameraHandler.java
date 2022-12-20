@@ -92,9 +92,13 @@ class CameraHandler {
     //A FLIR Camera
     private Camera camera;
 
+//    LinkedList<Double> thermalLinkedList = new LinkedList<Double>();
     LinkedList<Double> thermalLinkedList = new LinkedList<Double>();
-    int count = 0;
-    int ITERATIVE_MAXIMUM = 200;
+    int count = -1;
+    int ITERATIVE_MAXIMUM = 60;
+    double frameTemperature;
+
+
 
     Context context;
 
@@ -166,6 +170,7 @@ class CameraHandler {
         stopRecord(thermalImageStreamListener);
     }
 
+
     /**
      * Add a found camera to the list of known cameras
      */
@@ -184,6 +189,15 @@ class CameraHandler {
     @Nullable
     public List<Identity> getCameraList() {
         return Collections.unmodifiableList(foundCameraIdentities);
+    }
+
+    public String[] getSuhu(){
+        String[] data= new String[thermalLinkedList.size()];
+        for(int i = 0; i<thermalLinkedList.size(); i++){
+            data[i] = String.valueOf(thermalLinkedList.get(i));
+        }
+
+        return data;
     }
 
     /**
@@ -303,34 +317,33 @@ class CameraHandler {
                 thermalImage.getFusion().setFusionMode(FusionMode.VISUAL_ONLY);
                 rgbBitmap = BitmapAndroid.createBitmap(thermalImage.getFusion().getPhoto()).getBitMap();
             }
-//            new Thread(() ->{
-            Bitmap cropRgbBitmap = Bitmap.createBitmap(rgbBitmap, 65, 160, 960, 1280);
-            Canvas rgbCanvas = new Canvas(cropRgbBitmap);
-            rgbCanvas.drawBitmap(cropRgbBitmap, 0, 0, null);
-            Canvas thermalCanvas = new Canvas(thermalBitmap);
-            thermalCanvas.drawBitmap(thermalBitmap, 0, 0, null);
+//            new Thread(() -> {
+                Bitmap cropRgbBitmap = Bitmap.createBitmap(rgbBitmap, 65, 160, 960, 1280);
+                Canvas rgbCanvas = new Canvas(cropRgbBitmap);
+                rgbCanvas.drawBitmap(cropRgbBitmap, 0, 0, null);
+                Canvas thermalCanvas = new Canvas(thermalBitmap);
+                thermalCanvas.drawBitmap(thermalBitmap, 0, 0, null);
+
+                Paint myRectPaint = new Paint();
+                myRectPaint.setStrokeWidth(5);
+                myRectPaint.setColor(Color.RED);
+                myRectPaint.setStyle(Paint.Style.STROKE);
 
 
-            Paint myRectPaint = new Paint();
-            myRectPaint.setStrokeWidth(5);
-            myRectPaint.setColor(Color.RED);
-            myRectPaint.setStyle(Paint.Style.STROKE);
+                FaceDetector faceDetector = new FaceDetector
+                        .Builder(context)
+                        .setTrackingEnabled(false)
+                        .setProminentFaceOnly(true)
+                        .setMode(FaceDetector.FAST_MODE)
+                        .setLandmarkType(FaceDetector.ALL_LANDMARKS)
+                        .build();
+                Paint hidungPaint;
+                hidungPaint = new Paint();
+                hidungPaint.setStrokeWidth(3);
+                hidungPaint.setColor(Color.GREEN);
+                hidungPaint.setStyle(Paint.Style.STROKE);
 
-            FaceDetector faceDetector = new FaceDetector
-                    .Builder(context)
-                    .setTrackingEnabled(false)
-                    .setProminentFaceOnly(true)
-                    .setMode(FaceDetector.FAST_MODE)
-                    .setLandmarkType(FaceDetector.ALL_LANDMARKS)
-                    .build();
-            Paint hidungPaint;
-            hidungPaint = new Paint();
-            hidungPaint.setStrokeWidth(3);
-            hidungPaint.setColor(Color.GREEN);
-            hidungPaint.setStyle(Paint.Style.STROKE);
-//            for(int j = 0; j<ITERATIVE_MAXIMUM; j++){
-
-                if(faceDetector.isOperational()) {
+                if (faceDetector.isOperational()) {
                     Frame frame = new Frame.Builder().setBitmap(cropRgbBitmap).build();
                     SparseArray<Face> faces = faceDetector.detect(frame);
                     faceDetector.release();
@@ -410,6 +423,8 @@ class CameraHandler {
                                         if (varianBlock > saveVarianceBlock) {
                                             saveVarianceBlock = varianBlock;
                                             saveTempBlock = getMean(temperatureBlock) - 273.15;
+                                        } else {
+//                                        thermalLinkedList.add(0,0.0);
                                         }
 
                                         sBlock = srBlock;
@@ -418,18 +433,17 @@ class CameraHandler {
                                         }
                                         srBlock = srBlock + wBlock;
                                     }
-
-                                    thermalLinkedList.add(count,saveTempBlock);
+                                    frameTemperature = saveTempBlock;
+                                    thermalLinkedList.add(count, saveTempBlock);
                                 }
                             }
                         }
-                    }else{
-                        thermalLinkedList.add(0,0.0 );
+                    } else {
+                        thermalLinkedList.add(0, 0.0);
                     }
                     dataRecord.record(thermalBitmap, cropRgbBitmap);
-    //            }).start();
                 }
-//            }
+//            }).start();
         }
 
         public double getVarianceNostril(double[] temperatureBlock){
@@ -439,7 +453,7 @@ class CameraHandler {
                 double hasilKuadrat = Math.pow((temperatureBlock[i] - mean),2);
                 hasil = hasil + hasilKuadrat;
             }
-            return hasil/ temperatureBlock.length;
+            return hasil/ temperatureBlock.length-1;
         }
 
         public double getMean(double[] data){
